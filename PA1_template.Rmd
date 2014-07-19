@@ -2,19 +2,161 @@
 
 
 ## Loading and preprocessing the data
+First, change the working directory to match the location of the csv file and load the csv into a data frame.
+```{r}
+setwd("~/Repos/RepData_PeerAssessment1")
+activity <- read.csv("activity.csv")
+```
 
 
+#### Aggregation By Day
+Since the first question asks about statistics per day, it will be easier to compute those if there is just 1 row per day. The aggregate function will help process the data in that way
+```{r}
+activity_by_day <- aggregate(activity$steps, by=list(activity$date), FUN=sum)
+colnames(activity_by_day) <- c("date", "total_steps")
+```
+
+#### Aggregation By Interval
+The second question asks about statistics per 5 minute interval, thus we will do a similar aggregation as above but using the interval rather than the date as the group by factor. Also the mean is the needed function.
+```{r}
+activity_by_interval <- aggregate(activity$steps, by=list(activity$interval), FUN=mean, na.rm=TRUE)
+colnames(activity_by_interval) <- c("interval", "mean_steps")
+```
 
 ## What is mean total number of steps taken per day?
+#### Histogram
+This question asks for a histogram of the total number of steps taken each day. The histogram looks like:
+```{r}
+hist(activity_by_day$total_steps, main = "Histogram of the total number of steps taken each day", xlab = "Total number of steps per day", ylab = "Frequency")
+```
 
+#### Mean
+To calculate the mean the mean() function will be used. Because we want to ignore missing values we will set na.rm to TRUE
 
+```{r}
+mean(activity_by_day$total_steps, na.rm=TRUE)
+```
+
+#### Median
+To calculate the median the median() function will be used. Because we want to ignore missing values we will set na.rm to TRUE
+
+```{r}
+median(activity_by_day$total_steps, na.rm=TRUE)
+```
 
 ## What is the average daily activity pattern?
+#### Part 1
+For this question the activity_by_interval data frame that was defined above will be used. A plot of that data frame can be made as follow:
+```{r}
+plot(activity_by_interval$interval, activity_by_interval$mean_steps, type = "l", main = "Average Daily Activity Pattern", xlab = "5 minute interval", ylab = "Average Total Steps")
+```
 
+#### Part 2
+The second part of the question asks for which interval contians the max average number of steps. From the plot we can see it lies between 500-1000. Since we want the interval which contain the max rather than the max value itself, the which.max funciton will be used. The output tells us the 104 index contains the max mean_steps of 206.1698, which is in interval 835.
+```{r}
+activity_by_interval[which.max(activity_by_interval$mean_steps),]
+```
 
 
 ## Imputing missing values
+#### Part 1
+The first part of this question asks for the total number of rows with NA values. To calculate this the complete.cases function will be leveraged. Taking a summary of the logical vector informs us that 2304 rows have some NA value.
+```{r}
+no_nas <- complete.cases(activity)
+summary(no_nas)
+```
 
+The next part of the question asks for a strategy to fill in the missing values. The below approach will replace NA values with the average value for that interval. Activity2 becomes the new data frame with the missing values filled in.
 
+#### Part 2 & 3
+```{r}
+fillinNAs <- function(x, reference) {
+    good_rows <- complete.cases(x)
+    for(index in 1:nrow(x)) {
+        if(good_rows[index] == FALSE){
+            interval <- x[index,3]
+            x[index,1] <- reference[reference[,1] == interval,2]
+        }
+    }
+    return(x)
+}
+
+activity2 <- fillinNAs(activity, activity_by_interval)
+
+```
+
+#### Part 4
+Now we want to make a histogram, similar to what was made earlier on. So again we need to repeat the aggregation by day step on the new data frame.
+```{r}
+activity2_by_day <- aggregate(activity2$steps, by=list(activity2$date), FUN=sum)
+colnames(activity2_by_day) <- c("date", "total_steps")
+```
+
+##### Histogram
+Again, simialr code from the above histogram will be used.
+```{r}
+hist(activity2_by_day$total_steps, main = "Histogram: total number of steps taken each day with NAs replaced", xlab = "Total number of steps per day", ylab = "Frequency")
+```
+
+##### Mean
+Same mean calcualtion as before but on the new data frame.
+
+```{r}
+mean(activity2_by_day$total_steps, na.rm=TRUE)
+```
+
+##### Median
+Same median claculation as before but on the new data frame.
+
+```{r}
+median(activity2_by_day$total_steps, na.rm=TRUE)
+```
+#### Part 4
+##### Do these values differ from above? What is the impact of imputing missing data?
+There is not much change in the values. The mean is the exact same. The median increases by 1. The histogram distribution is relatively unchaged, however the frequency has increased by roughly 10.
+
+The overall impact appears to be relatively small. If we think this through, by replacing NA values with average values we should have reduced the variance in the data. Pushing the mean and median to the same value is evidence of this. 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+#### Part 1
+In this part we want to add a new factor that is either "weekend" or "weekday". The weekdays() function returns the day of the week as a character, so we'll use a utility function to translate that to the values we need.
+
+```{r}
+weekend <- function(vector){
+    new_vector <- character(length = length(vector))
+    for(i in 1:length(vector)){
+        if(vector[i] == "Sunday" | vector[i] == "Saturday"){
+            new_vector[i] <- "weekend"
+        } else {
+            new_vector[i] <- "weekday"
+        }
+    }  
+    return(new_vector)
+}
+## Pass the dates into the new function
+day_type <- weekend(weekdays(as.Date(activity2$date)))
+## Bind the day_type vector to the manipulated activity data frame
+activity3 <- cbind(activity2, day_type)
+```
+
+### Part 2
+Now, we want to plot the time intervals 
+```{r}
+## Subset by day_type
+weekend_activity <- subset(activity3, activity3$day_type == "weekend")
+weekday_activity <- subset(activity3, activity3$day_type == "weekday")
+
+## Aggregate by intervals using mean
+weekend_by_interval <- aggregate(weekend_activity$steps, by=list(weekend_activity$interval), FUN=mean, na.rm=TRUE)
+weekday_by_interval <- aggregate(weekday_activity$steps, by=list(weekday_activity$interval), FUN=mean, na.rm=TRUE)
+
+## Rename columns
+colnames(weekend_by_interval) <- c("interval", "total_steps")
+colnames(weekday_by_interval) <- c("interval", "total_steps")
+
+## Plot data
+par(mfrow=c(2,1))
+plot(weekend_by_interval$interval, weekend_by_interval$total_steps, type = "l", main = "Average Daily Activity Pattern: Weekend", xlab = "5 minute interval", ylab = "Average Total Steps")
+plot(weekday_by_interval$interval, weekday_by_interval$total_steps, type = "l", main = "Average Daily Activity Pattern: Weekday", xlab = "5 minute interval", ylab = "Average Total Steps")
+```
